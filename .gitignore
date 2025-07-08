@@ -1,0 +1,41 @@
+# Python cache and build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.log
+
+# Weights & Biases logs (W&B)
+wandb/
+!wandb/.gitignore            # Keep the ignore rule for W&B but allow nested .gitignore
+wandb/run-*/                 # Optionally ignore individual runs
+
+# SLURM job scripts and outputs
+#slurm_scripts/
+slurm_logs_train/
+slurm_logs_train/*.err
+slurm_logs_train/*.out
+
+# Jupyter notebooks and checkpoint files
+*.ipynb
+notebooks/
+**/.ipynb_checkpoints/
+# plot-paper/.ipynb_checkpoints/
+egridlv_gym/egridlv_gym/envs/.ipynb_checkpoints/
+
+# Package metadata
+egridlv_gym/egridlv_gym.egg-info/
+egridlv_gym/build/
+
+# Ignore plot-paper output files
+plot-paper/*.pgf
+plot-paper/*.png
+**/.ipynb_checkpoints/
+!plot-paper/*.ipynb
+
+# Ignore large model files
+models/**/CAPQL.tar
+models/feeder-voltage/best_capql/
+models/feeder-voltage/capql.tar
+models/household-economic/best_capql/
+models/household-economic/capql.tar
+

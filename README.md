@@ -9,10 +9,10 @@
 
 <h1 align="center">Multi-Objective Reinforcement Learning with Shielding for Control and Safety in Power Grids</h1>
 
-**⚠️ Note**: *Last update on 08.07.2025*
+**⚠️ Note**: _Last update on 08.07.2025_
 
 This repository contains the Python implementation of our paper: **Multi-Objective
-Reinforcement Learning with Shielding for Control and Safety in Power Grids**. 
+Reinforcement Learning with Shielding for Control and Safety in Power Grids**.
 It simulates a low-voltage grid that includes the control of photovoltaic (PV) inverters,
 battery energy storage system (BES) inverters, battery electric vehicle (BEV) chargers,
 and heat pumps (HP). Several generation and load profiles as well as dynamic EPEX spot
@@ -107,7 +107,7 @@ The following environments (problem settings) are available:
    ```
 
    ```bash
-   cd ~/eGridLVGym  
+   cd ~/eGridLVGym
    pip install -r requirements_sorl.txt
    pip uninstall egridlv-gym -y
    pip install -e .
@@ -187,15 +187,15 @@ The following environments (problem settings) are available:
 To train a SORL algorithm, use the **[train.py](train.py)** script, with the following
 arguments:
 
-| Argument      | Type | Default Value    | Choices                                                                      | Help                                                      |
-| ------------- | ---- | ---------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `--algorithm` | str  | `ppo`            | `ppo`, `sac`, `ddpg`, `td3`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`           | The RL algorithm (from stable_baselines3 or sb3_contrib). |
-| `--episodes`  | int  | `8000`             | integer                                                                      | Number of episodes to train for.                          |
-| `--num-envs`  | int  | `4`              | integer                                                                      | Number of environments to run in parallel.                |
-| `--usecase`   | str  | `feeder-voltage` | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined` | The use case to train on.                                 |
-| `--seed`      | int  | `42`     | `0`–`inf`                                                                    | Random number generator seed.                             |
-| `--eval-freq` | int  | `500`            |                                                                              | Evaluation frequency (in number of episodes).             |
-| `--curtailment-scaling` | float         | `1.0`            | Float                                                     | Scaling factor for the curtailment reward.                |
+| Argument                | Type  | Default Value    | Choices                                                                      | Help                                                      |
+| ----------------------- | ----- | ---------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `--algorithm`           | str   | `ppo`            | `ppo`, `sac`, `ddpg`, `td3`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`           | The RL algorithm (from stable_baselines3 or sb3_contrib). |
+| `--episodes`            | int   | `8000`           | integer                                                                      | Number of episodes to train for.                          |
+| `--num-envs`            | int   | `4`              | integer                                                                      | Number of environments to run in parallel.                |
+| `--usecase`             | str   | `feeder-voltage` | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined` | The use case to train on.                                 |
+| `--seed`                | int   | `42`             | `0`–`inf`                                                                    | Random number generator seed.                             |
+| `--eval-freq`           | int   | `500`            |                                                                              | Evaluation frequency (in number of episodes).             |
+| `--curtailment-scaling` | float | `1.0`            | Float                                                                        | Scaling factor for the curtailment reward.                |
 
 ##### **3.1a Example Training - Using Command Line**:
 
@@ -206,7 +206,7 @@ python train.py --algorithm sac --episodes 8000 --num-envs 4 --use-case feeder-c
 ##### **3.1b Example Training - Using SLURM**:
 
 ```bash
-chmod +x slurm_scripts/run_training.sh 
+chmod +x slurm_scripts/run_training.sh
 sbatch ./slurm_scripts/run_training.sh sac 8000 4 feeder-combined
 ```
 
@@ -215,18 +215,17 @@ sbatch ./slurm_scripts/run_training.sh sac 8000 4 feeder-combined
 To evaluate a trained model, use the **[evaluation.py](evaluation.py)** script, with the
 following arguments:
 
-| Argument             | Type | Default Value        | Choices                                                                                                                     | Help                                                                                   |
-| -------------------- | ---- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `--algorithm`        | str  | `ppo`                | `ppo`, `sac`, `td3`, `ddpg`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`, `bench_nothing`, `bench_price_window`, `bench_residual` | RL algorithm to evaluate (from stable_baselines3, sb3_contrib, or rule-based control). |
-| `--envs`             | int  | `4`                  | `1`,`2`,`3`,`4`                                                                                                             | Number of parallel environments to run. Must match the training setup.                 |
-| `--no-normalization` | bool | `False`              | `True`, `False`                                                                                                             | Disable environment normalization (useful for rule-based controllers).                 |
-| `--usecase`          | str  | `household-economic` | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined`                                                | The use case to evaluate.                                                              |
-| `--obs-space`        | str  | `box`                | `box`, `dict`                                                                                                               | Observation space: `box` (default) or `dict` (e.g., for RBC).                          |
-| `--folder`           | str  | `./models/feeder-combined/best_a2c/best_model` | `Path`                                                                                            | Optional path to the model folder.                                                     |
-| `--seed`             | int  | `58`                 | `0`–`inf`                                                                                                                   | Random seed for the environment.                                                       |
-| `--enable_shielding` | bool | `False`              | `True`, `False`                                                                                                             | Enable reactive power control (shielding).                                             |
-| `--enforce_hard_grid_constraint` | bool | `False`  | `True`, `False`                                                                                                             | Enforce critical grid constraints (e.g., transformer load).                            |
-
+| Argument                         | Type | Default Value                                  | Choices                                                                                                                     | Help                                                                                   |
+| -------------------------------- | ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `--algorithm`                    | str  | `ppo`                                          | `ppo`, `sac`, `td3`, `ddpg`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`, `bench_nothing`, `bench_price_window`, `bench_residual` | RL algorithm to evaluate (from stable_baselines3, sb3_contrib, or rule-based control). |
+| `--envs`                         | int  | `4`                                            | `1`,`2`,`3`,`4`                                                                                                             | Number of parallel environments to run. Must match the training setup.                 |
+| `--no-normalization`             | bool | `False`                                        | `True`, `False`                                                                                                             | Disable environment normalization (useful for rule-based controllers).                 |
+| `--usecase`                      | str  | `household-economic`                           | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined`                                                | The use case to evaluate.                                                              |
+| `--obs-space`                    | str  | `box`                                          | `box`, `dict`                                                                                                               | Observation space: `box` (default) or `dict` (e.g., for RBC).                          |
+| `--folder`                       | str  | `./models/feeder-combined/best_a2c/best_model` | `Path`                                                                                                                      | Optional path to the model folder.                                                     |
+| `--seed`                         | int  | `58`                                           | `0`–`inf`                                                                                                                   | Random seed for the environment.                                                       |
+| `--enable_shielding`             | bool | `False`                                        | `True`, `False`                                                                                                             | Enable reactive power control (shielding).                                             |
+| `--enforce_hard_grid_constraint` | bool | `False`                                        | `True`, `False`                                                                                                             | Enforce critical grid constraints (e.g., transformer load).                            |
 
 ##### **3.2a Evaluation Scripts - Using Command Line**:
 
@@ -241,7 +240,7 @@ python evaluation.py --algorithm ddpg --envs 4 --usecase feeder-combined --folde
 
 ```bash
 chmod +x slurm_scripts/run_evaluation.sh
-slurm_scripts/run_evaluation.sh a2c 4 feeder-combined 
+slurm_scripts/run_evaluation.sh a2c 4 feeder-combined
 ```
 
 #### **Multi-Objective Training and Evaluation**:
@@ -281,6 +280,7 @@ If you use this framework in your research, please consider citing our paper &#1
     keywords = {Multi-objective Reinforcement Learning, Energy Management, Voltage Control, machine learning}
 }
 ```
+
 ## License
 
 This code is licensed under the [MIT License](LICENSE).

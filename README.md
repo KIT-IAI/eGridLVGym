@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.9.18-blue?logo=python)](https://www.python.org/downloads/release/python-3918/)
 [![License](https://img.shields.io/badge/License-MIT-green?logo=opensource)](./LICENSE)
 [![Code Style](https://img.shields.io/badge/Code%20Style-black-000000.svg?logo=python)](https://github.com/psf/black)
-[![DOI](https://img.shields.io/badge/DOI-10.1145%2F12345678.12345678-orange?logo=doi)]([https://doi.org/10.1186/s42162-025-00489-6](https://energy.acm.org/eir/multi-objective-reinforcement-learning-with-shielding-for-control-and-safety-in-power-grids/))
+[![DOI](https://img.shields.io/badge/DOI-10.1007%2F9783031.74741016-orange?logo=doi)](https://energy.acm.org/eir/multi-objective-reinforcement-learning-with-shielding-for-control-and-safety-in-power-grids/)
 
 <h1 align="center">Multi-Objective Reinforcement Learning with Shielding for Control and Safety in Power Grids</h1>
 

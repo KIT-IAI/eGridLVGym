@@ -262,7 +262,7 @@ If you use this framework in your research, please consider citing our paper &#1
 </p>
 
 ```bibtex
-@article{Demirel2025_MORL,
+@article{demirel2025,
     author = {Gökhan Demirel and Simon Grafenhorst and Jakob Ohm and Benjamin Schäfer and Kevin Förderer and Veit Hagenmeyer},
     title = {Multi-Objective Reinforcement Learning with Shielding for Control and Safety in Power Grids},
     year = {2025},

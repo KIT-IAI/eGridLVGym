@@ -1,5 +1,5 @@
 """
-train.py – Trains a single-objective RL agent on eGridLV environments.
+train.py - Trains a single-objective RL agent on eGridLV environments.
 The script sets up the selected use case, initializes the RL algorithm,
 and trains the agent using SB3.
 Results, logs, and models are saved for reproducibility and evaluation.
@@ -183,8 +183,25 @@ if __name__ == "__main__":
         default=1.0,
         help="The scaling factor for the curtailment reward.",
     )
+    parser.add_argument(
+        "--reward-variant",
+        type=str,
+        default="default",
+        choices=["default", "qu", "band", "band_q", "l1_qu", "bowl_qu", "hinge_qu", "step_qu", "count_qu", "bowl_qu_l10", "l1_qu_l10", "default_l10"],
+        help="Reward variant: default (original reward); combined use case: qu (dead-band voltage term, line term "
+        "above 80 %, PV reactive power cost); voltage use case: band, band_q, qu, l1_qu, bowl_qu, hinge_qu, step_qu, "
+        "count_qu and *_l10 (line term weighted by 10).",
+    )
+    parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Folder name for models and logs (default: the use case), e.g. feeder-combined-pf-s42, so that runs "
+        "with different settings do not overwrite each other.",
+    )
     args = parser.parse_args()
     logger.debug(f"Parsed arguments: {args}")
+    run_dir = args.run_name or args.usecase
 
     algorithm = args.algorithm
     time_steps = args.episodes * 96 * 7
@@ -226,6 +243,7 @@ if __name__ == "__main__":
         env_kwargs={
             "curtailment_cost_scaling": args.curtailment_scaling,
             "render_mode": None,
+            "reward_variant": args.reward_variant,
         },
         vec_env_cls=SubprocVecEnv,
         seed=args.seed,
@@ -240,7 +258,7 @@ if __name__ == "__main__":
     # Wrap environment for logging/monitoring
     train_env = VecMonitor(
         train_env,
-        filename=f"results/{args.usecase}/train_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        filename=f"results/{run_dir}/train_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
     )  # /train_{args.num_envs}_{algorithm_name}_{args.seed}
 
     # Select model based on algorithm
@@ -253,24 +271,26 @@ if __name__ == "__main__":
         env_kwargs={
             "training": True,
             "render_mode": None,
+            "curtailment_cost_scaling": args.curtailment_scaling,
+            "reward_variant": args.reward_variant,
         },
         vec_env_cls=SubprocVecEnv,
     )
 
     eval_env = VecMonitor(
         eval_env,
-        filename=f"results/{args.usecase}/eval_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        filename=f"results/{run_dir}/eval_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
     )
 
     # Evaluation callback setup
     eval_callback = EvalCallback(
         eval_env,
-        best_model_save_path=f"models/{args.usecase}/best_{algorithm_name}/",
+        best_model_save_path=f"models/{run_dir}/best_{algorithm_name}/",
         eval_freq=max(eval_freq // args.num_envs, 1),
         deterministic=True,
         render=False,
         n_eval_episodes=11 * args.num_envs,
-        log_path=f"results/{args.usecase}/eval_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        log_path=f"results/{run_dir}/eval_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
     )
 
     logger.info(f"Starting '{algorithm}' training for {args.episodes} episodes.")
@@ -285,7 +305,7 @@ if __name__ == "__main__":
     )
 
     # Saving Model
-    model_save_path = f"models/{args.usecase}/{algorithm_name}"
+    model_save_path = f"models/{run_dir}/{algorithm_name}"
     model.save(model_save_path)
 
     # Log training end time, duration, and save location

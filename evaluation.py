@@ -110,8 +110,6 @@ def run_experiment(
         model = RuleBasedController(mode="baseline")
     elif algorithm == "baseline_price_window":
         model = RuleBasedController(mode="price_window")
-    elif algorithm == "baseline_residual":
-        model = RuleBasedController(mode="residual")
     elif algorithm == "baseline_voltage":
         model = RuleBasedController(mode="baseline")
         rule_based_voltage = True
@@ -262,7 +260,7 @@ def run_experiment(
     logger.info(f"Finished episode {iteration}")
     # Save evaluation result to CSV
     eval_episode_data = pd.DataFrame(global_result)
-    # Ausgabepfad für Evaluationsergebnisse festlegen
+    # set the output path for the evaluation results
     if enable_shielding:
         if enforce_hard_grid_constraint:
             logging.info("[INFO] Shielding and transformer hard constraint enforced.")

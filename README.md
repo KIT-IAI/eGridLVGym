@@ -9,7 +9,7 @@
 
 <h1 align="center">Multi-Objective Reinforcement Learning with Shielding for Control and Safety in Power Grids</h1>
 
-**⚠️ Note**: _Last update on 19.12.2025_
+**⚠️ Note**: _Last update on 08.11.2026_
 
 This repository contains the Python implementation of our paper: **Multi-Objective
 Reinforcement Learning with Shielding for Control and Safety in Power Grids**.
@@ -189,18 +189,20 @@ arguments:
 
 | Argument                | Type  | Default Value    | Choices                                                                      | Help                                                      |
 | ----------------------- | ----- | ---------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------- |
-| `--algorithm`           | str   | `ppo`            | `ppo`, `sac`, `ddpg`, `td3`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`           | The RL algorithm (from stable_baselines3 or sb3_contrib). |
-| `--episodes`            | int   | `8000`           | integer                                                                      | Number of episodes to train for.                          |
+| `--algorithm`           | str   | `ppo`            | `ppo`, `ppo_tuned`, `sac`, `ddpg`, `td3`, `a2c`, `tqc`, `trpo`, `recurrent_ppo` | The RL algorithm (from stable_baselines3 or sb3_contrib). |
+| `--episodes`            | int   | `10`             | integer                                                                      | Number of episodes to train for (8000 in the paper).      |
 | `--num-envs`            | int   | `4`              | integer                                                                      | Number of environments to run in parallel.                |
-| `--usecase`             | str   | `feeder-voltage` | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined` | The use case to train on.                                 |
+| `--usecase`             | str   | `household-economic` | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined` | The use case to train on.                             |
 | `--seed`                | int   | `42`             | `0`–`inf`                                                                    | Random number generator seed.                             |
 | `--eval-freq`           | int   | `500`            |                                                                              | Evaluation frequency (in number of episodes).             |
 | `--curtailment-scaling` | float | `1.0`            | Float                                                                        | Scaling factor for the curtailment reward.                |
+| `--reward-variant`      | str   | `default`        | `default`, `qu`, `band`, `band_q`, `l1_qu`, `bowl_qu`, `hinge_qu`, `step_qu`, `count_qu`, `bowl_qu_l10`, `l1_qu_l10`, `default_l10` | Reward variant: `default` is the original reward; `feeder-combined`: `qu` (voltage term only outside the Q(U) dead band 0.97-1.03 p.u., line term above 80 %, PV reactive power cost); `feeder-voltage`: `band`, `band_q`, `qu` and the penalty shapes `l1_qu`, `bowl_qu`, `hinge_qu`, `step_qu`, `count_qu`; `*_l10`: line term weighted by 10. |
+| `--run-name`            | str   | use case         | string                                                                       | Folder name under `models/` and `results/`, so that runs with different settings do not overwrite each other. |
 
 ##### **3.1a Example Training - Using Command Line**:
 
 ```bash
-python train.py --algorithm sac --episodes 8000 --num-envs 4 --use-case feeder-combined
+python train.py --algorithm sac --episodes 8000 --num-envs 4 --usecase feeder-combined
 ```
 
 ##### **3.1b Example Training - Using SLURM**:
@@ -217,10 +219,10 @@ following arguments:
 
 | Argument                         | Type | Default Value                                  | Choices                                                                                                                     | Help                                                                                   |
 | -------------------------------- | ---- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `--algorithm`                    | str  | `ppo`                                          | `ppo`, `sac`, `td3`, `ddpg`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`, `bench_nothing`, `bench_price_window`, `bench_residual` | RL algorithm to evaluate (from stable_baselines3, sb3_contrib, or rule-based control). |
+| `--algorithm`                    | str  | `ppo`                                          | `ppo`, `ppo_tuned`, `sac`, `td3`, `ddpg`, `a2c`, `tqc`, `trpo`, `recurrent_ppo`, `sac_curtailment_scaled`, `td3_curtailment_scaled`, `tqc_curtailment_scaled`, `baseline`, `baseline_price_window`, `baseline_voltage` | RL algorithm to evaluate (from stable_baselines3, sb3_contrib, or rule-based control). |
 | `--envs`                         | int  | `4`                                            | `1`,`2`,`3`,`4`                                                                                                             | Number of parallel environments to run. Must match the training setup.                 |
 | `--no-normalization`             | bool | `False`                                        | `True`, `False`                                                                                                             | Disable environment normalization (useful for rule-based controllers).                 |
-| `--usecase`                      | str  | `household-economic`                           | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined`                                                | The use case to evaluate.                                                              |
+| `--usecase`                      | str  | `feeder-combined`                              | `household-economic`, `feeder-economic`, `feeder-voltage`, `feeder-combined`                                                | The use case to evaluate.                                                              |
 | `--obs-space`                    | str  | `box`                                          | `box`, `dict`                                                                                                               | Observation space: `box` (default) or `dict` (e.g., for RBC).                          |
 | `--folder`                       | str  | `./models/feeder-combined/best_a2c/best_model` | `Path`                                                                                                                      | Optional path to the model folder.                                                     |
 | `--seed`                         | int  | `58`                                           | `0`–`inf`                                                                                                                   | Random seed for the environment.                                                       |
@@ -248,9 +250,9 @@ slurm_scripts/run_evaluation.sh a2c 4 feeder-combined
 For multi-objective training and evaluation, use the **[train_mo.py](train_mo.py)** and
 **[evaluation_mo.py](evaluation_mo.py)** scripts, respectively. As morl-baselines
 currently does not support parallel environments, the number of environments is set to
-1\. The logging also follows a different format and requires a wandb account. If you want
-to use it with the SLURM scripts, please edit `slurm_scripts/run_training_mo.sh` and
-`slurm_scripts/run_evaluation_mo.sh` accordingly with your API key. Currently only CAPQL
+1\. The logging follows a different format; logging to wandb is optional (`--wandb_log`, requires a wandb
+account). If you want to use it with the SLURM scripts, please edit `slurm_scripts/run_mo_training.sh` and
+`slurm_scripts/run_mo_evaluation.sh` accordingly with your API key. Currently only CAPQL
 is supported for multi-objective training; to add other models edit the `train_mo.py`
 script.
 

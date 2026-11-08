@@ -11,7 +11,7 @@ class RuleBasedController:
         Initializes the rule-based controller.
         Args:
             mode: str, the rule the controller should follow.
-                  Can be "price_window", "residual", or "baseline".
+                  Can be "price_window" or "baseline".
             ev_target: float, target SOC for EVs.
             price_memory: list or None, historical price memory.
         """
@@ -24,9 +24,7 @@ class RuleBasedController:
         """
         Emulates the predict method of a RL agent.
         """
-        if self.mode == "residual":
-            bes_action = self.predict_residual(observation)
-        elif self.mode == "price_window":
+        if self.mode == "price_window":
             price_state = self.decide_price_state_window(observation)
             # price_state = self.decide_based_on_price_forecast(observation) #2
             bes_action = self.choose_bes_actions(observation, price_state)

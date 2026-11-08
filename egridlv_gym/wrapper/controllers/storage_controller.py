@@ -1,6 +1,7 @@
 import numpy as np
 
 
+
 class StorageController:
     def __init__(
         self,
@@ -25,7 +26,9 @@ class StorageController:
         self.max_e_mwh = storage.max_e_mwh * power_scaling
         self.p_mw = 0
         self.efficiency_percent = storage.efficiency_percent
-        self.discharge_loss = 0.13
+        # self-discharge per day as a share of the stored energy: 0.001/day = 3 %/month, upper end of Li-ion
+        # battery storage incl. BMS consumption (assumption)
+        self.discharge_loss = 0.001
         self.q_mode = q_mode
         self.sn_mva = storage.sn_mva * power_scaling
         self.c_precision = 4
@@ -98,13 +101,15 @@ class StorageController:
         penalty = 0
         p_mw = action * self.max_p_mw
         e_current = self.soc_percent * self.max_e_mwh
-        if (p_mw > ((self.max_e_mwh - e_current) * 4)) or (p_mw > self.max_p_mw):
-            p_mw = (self.max_e_mwh - e_current) * 4
-            p_mw = min(p_mw, self.max_p_mw)
+        # one-step energy headroom incl. efficiency (see update_soc_from_previous):
+        # charging stores P * eta * dt, discharging removes P / eta * dt
+        p_charge_max = (self.max_e_mwh - e_current) * 4 / self.efficiency_percent
+        p_discharge_max = e_current * 4 * self.efficiency_percent
+        if (p_mw > p_charge_max) or (p_mw > self.max_p_mw):
+            p_mw = min(p_charge_max, self.max_p_mw)
             penalty = 1
-        elif (p_mw < -(e_current * 4)) or (p_mw < -self.max_p_mw):
-            p_mw = -e_current * 4
-            p_mw = max(p_mw, -self.max_p_mw)
+        elif (p_mw < -p_discharge_max) or (p_mw < -self.max_p_mw):
+            p_mw = max(-p_discharge_max, -self.max_p_mw)
             penalty = 1
         p_mw = round(p_mw, self.c_precision)
         self.p_mw = p_mw
@@ -132,7 +137,11 @@ class StorageController:
 
     def update_soc_from_previous(self, grid):
         """Updates the state of charge based on the previous time step."""
-        delta_energy = self.p_mw * (1 / self.efficiency_percent) / 4
+        # charging stores P * eta * dt, discharging removes P / eta * dt
+        if self.p_mw >= 0:
+            delta_energy = self.p_mw * self.efficiency_percent / 4
+        else:
+            delta_energy = self.p_mw / self.efficiency_percent / 4
         # Loss of energy due to self-discharge
         discharge_loss = (self.discharge_loss / 96) * self.soc_percent * self.max_e_mwh
         self.current_energy_change = delta_energy - discharge_loss
@@ -145,23 +154,22 @@ class StorageController:
         grid.storage.at[self.sid, "soc_percent"] = self.soc_percent
 
     def calc_allowed_reactive_power(self, cos_phi_value):
-        """Calculate the available reactive power ("zur Verfügung stehende
-        Blindleistung") (q_available) for a given power factor (cos φ).
-        This function calculates the phase angle (φ) and the tangent of
-        the phase angle (tan φ) based on the given power factor (cos φ).
+        """Calculate the available reactive power (q_available) for a given power factor (cos phi).
+        This function calculates the phase angle (phi) and the tangent of
+        the phase angle (tan phi) based on the given power factor (cos phi).
         It then multiplies the tangent of the phase angle by the power
         factor to obtain the Qvb value, which represents the available
         reactive power in an electrical system, typically related to
         the apparent power (S).
         Args:
-            cos_phi_value (float): The power factor (cos φ) value.
+            cos_phi_value (float): The power factor (cos phi) value.
         Returns:
             float: The calculated q_available value.
         Notes:
             q_available_095 = self.calc_allowed_reactive_power(0.95)
-            print("Qvb for cos φ = 0.95:", q_available_095)
+            print("Qvb for cos phi = 0.95:", q_available_095)
         """
-        # Calculate the phase angle φ
+        # Calculate the phase angle phi
         phi = np.arccos(cos_phi_value)
         # Calculate the tangent of the phase angle
         tan_phi = np.tan(phi)
@@ -173,7 +181,7 @@ class StorageController:
         """(1): Q(V) - Voltage Reactive Power Control Mode
         Implements voltage-reactive power control (Q(V) characteristic) for PV systems.
         This method controls reactive power (Q) in response to the grid voltage (V),
-        as described by the Q(V) curve in accordance with VDE-AR-N 4105 (2018)
+        as described by the Q(V) curve in accordance with VDE-AR-N 4105:2026-03
         guidelines.
         It ensures that power outputs (real and reactive) are within the technical
         operational limits of the inverter. Depending on the normalized momentary real
@@ -184,7 +192,7 @@ class StorageController:
         power limit, while saving unbounded reactive power values for potential
         future usage or analysis.
         Low Power Range Condition:
-            For the range 0 ≤ Pmom/PEmax < 0.2, the reactive power should not exceed
+            For the range 0 <= Pmom/PEmax < 0.2, the reactive power should not exceed
             10%/20% of the maximum active power.
         Args:
             grid --  egrid
@@ -210,7 +218,8 @@ class StorageController:
             self.raw_norm_q_mvar = self.norm_q_mvar
 
             # Regulate reactive power to be no more than 10% of max active power, as in VDE.
-            max_bounded_q_mvar = self.norm_p_mw * 0.10
+            # low-power range according to VDE-AR-N 4105:2026-03: |Q| <= 10 % of P_Emax (= rated P), no Q when idle
+            max_bounded_q_mvar = 0.10 * self.max_p_mw / self.sn_mva if mom_p_mw != 0 else 0.0
             q_mvar_abs = min(abs(self.norm_q_mvar), abs(max_bounded_q_mvar))
 
             # Update the reactive power and normalize respecting the limitation.
@@ -230,71 +239,35 @@ class StorageController:
             self.p_mw = min(mom_p_mw, np.sqrt(self.sn_mva**2 - self.q_mvar**2))
 
     def constant_power_factor_control(self, grid, cos_phi):
-        """(2): const_cos_phi - Constant Power Factor Control Mode
-        Implements the Constant Power Factor Control Mode as per
-        VDE-AR-N 4105 for a PV system.
-        After running load_power_factor_settings function, the cos_phi value
-        is set as follows:
-            - (1): Q(U) - Voltage Reactive Power Control Mode
-            with (adjustment range between cos φ = 0.90 lagging and cos φ = 0.90 leading)
-            - (2): Constant Power Factor Control Mode
-            (between cos φ = 0.90 lagging and cos φ = 0.90 leading)
-        Low Power Range Condition:
-            For the range 0 ≤ Pmom/PEmax < 0.2, the reactive power should not exceed
-            10%/20% of the maximum active power.
-        Args:
-            cos_phi (float): The constant power factor value between 0.90 and 1.
-            mom_p_mw -- momentary active power desired by run_battery_p_control
-        Returns:
-            self.p_mw   -- active power calculated by reactive power control for DER-Inverter
-            self.q_mvar -- reactive power calculated by reactive power control for DER-Inverter
+        """Fixed power factor according to VDE-AR-N 4105:2026-03.
+
+        The active power is kept and the reactive power Q = |P| tan(phi) is taken from the headroom of the inverter
+        rating S_n; |P| is reduced only if sqrt(P^2 + Q^2) would exceed S_n (as in voltage_reactive_q_control).
+        Low-power range (|P| / S_n <= 0.2): |Q| <= 10 % of P_Emax. Idle storage provides no reactive power.
+
+        Convention: storage table of pandapower = load convention, P > 0 charging; underexcited (absorption) +q,
+        overexcited (injection) -q, independent of charging or discharging.
         """
-        # Normalize momentary active power output to its max value
-        mom_p_mw = self.p_mw
-        self.norm_mom_p_mw = mom_p_mw / self.max_p_mw
-        # Ensure normalized momentary active power is not greater than the max
-        self.norm_mom_p_mw = min(self.norm_mom_p_mw, 1)
-        self.mom_cos_phi = cos_phi
-        # Check if cos phi is within the range [0.90, 1] and raise error if not
-        if self.mom_cos_phi < self.min_cos_phi or self.mom_cos_phi > 1:
+        if cos_phi < self.min_cos_phi or cos_phi > 1:
             raise ValueError("cos_phi must be in the range [0.90, 1]")
-        # Set normalized momentary apparent power to the minimum of normalized values
-        self.norm_mom_sn_mva = min(self.norm_mom_p_mw, 1)
-        # Calculate active and reactive power from momentary normalized apparent power and cos phi
-        self.norm_mom_p_mw, q_norm_from_cos_phi = self._pq_from_cos_phi(
-            s_mva=self.norm_mom_sn_mva,
-            cos_phi=self.mom_cos_phi,
-        )
-        # Ensure normalized reactive power is within inverter range
-        self.norm_q_mvar = max(
-            self.norm_min_q_mvar, min(q_norm_from_cos_phi, self.norm_max_q_mvar)
-        )
-        # Calculate normalized active power from apparent and reactive power
-        self.norm_p_mw = min(self.norm_mom_p_mw, np.sqrt(1 - self.norm_q_mvar**2))
-        # Calculate momentary apparent power from active and reactive power
-        self.mom_sn_mva = np.sqrt(self.norm_p_mw**2 + self.norm_q_mvar**2)
-        # Check Low Power Range Condition
-        if np.abs(self.norm_mom_p_mw) <= self.reactive_power_performance_limit:
-            # Store the unbounded reactive power value
-            self.raw_norm_q_mvar = self.norm_q_mvar
-
-            # Regulate reactive power to be no more than 10% of max active power, as in VDE.
-            max_bounded_q_mvar = self.norm_p_mw * 0.10
-            q_mvar_abs = min(abs(self.norm_q_mvar), abs(max_bounded_q_mvar))
-
-            # Update the reactive power and normalize respecting the limitation.
-            self.q_mvar = np.copysign(q_mvar_abs, self.norm_q_mvar) * self.sn_mva
-            self.norm_q_mvar = self.q_mvar / self.sn_mva
-
-            # Update real power with the condition that it should not exceed the square root
-            # of the difference of the square of apparent power and the square of reactive power.
-            self.p_mw = min(mom_p_mw, np.sqrt(self.sn_mva**2 - self.q_mvar**2))
-        else:
-            # Active power exceeds 10% or 20% of the maximum active power.
-            # Fixed cos_phi(P) curve is based on a fixed cos_phi value.
-            # It follows a piecewise linear function for active power.
-            self.p_mw = self.norm_p_mw * self.sn_mva
-            self.q_mvar = self.norm_q_mvar * self.sn_mva
+        self.mom_cos_phi = cos_phi
+        p_mw = self.p_mw
+        mag = min(abs(p_mw), self.sn_mva)
+        if mag <= 0.0:
+            # idle storage: no reactive power
+            self.q_mvar = 0.0
+            self.norm_q_mvar = 0.0
+            return
+        tan_phi = np.sqrt(max(1.0 - cos_phi**2, 0.0)) / cos_phi
+        q_abs = min(mag * tan_phi, self.norm_max_q_mvar * self.sn_mva)
+        if mag / self.sn_mva <= self.reactive_power_performance_limit:
+            # low-power range: at most 10 % of P_Emax
+            q_abs = min(q_abs, 0.10 * self.max_p_mw)
+        # sign of Q from the excitation mode only (load convention)
+        self.q_mvar = self.get_q_sign() * q_abs
+        self.norm_q_mvar = self.q_mvar / self.sn_mva
+        self.p_mw = float(np.copysign(min(mag, np.sqrt(max(self.sn_mva**2 - self.q_mvar**2, 0.0))), p_mw))
+        self.norm_p_mw = self.p_mw / self.sn_mva
 
     def _pq_from_cos_phi(self, s_mva, cos_phi):
         """Calculates active and reactive power from power factor."""
@@ -308,32 +281,40 @@ class StorageController:
         return p_mw, q_mvar
 
     def _calculate_q_out(self, grid):
-        self.vm_pu_meas = grid.res_bus.at[self.bus, "vm_pu"]
-        """Calculates reactive power output based on measured voltage.
-        This function acts as a helper for the voltage-reactive power control
-        mode (Q(V) characteristic).
-        Return:
-            q_out (float): Normalized reactive power output based on the Q(V) characteristic.
-        """
+        """Reactive power setpoint of the Q(V) characteristic for the measured voltage at the own bus.
 
+        Convention: storage table of pandapower = load convention, +q = absorption (underexcited, lowers the
+        voltage), -q = injection (overexcited, raises the voltage).
+        VDE-AR-N 4105: under-voltage -> overexcited (-q), over-voltage -> underexcited (+q); dead band between v_2
+        and v_4, linear between v_1 and v_2 and between v_4 and v_5, saturated outside.
+
+        Returns:
+            q_out (float): reactive power normalised to S_n (load convention).
+        """
+        self.vm_pu_meas = grid.res_bus.at[self.bus, "vm_pu"]
         if self.vm_pu_meas <= self.v_1:
+            # strong under-voltage: overexcited, saturated (-q_max)
             q_out = -self.norm_max_q_mvar
             self.q_mode = "overexcited"
         elif self.vm_pu_meas <= self.v_2:
+            # under-voltage: overexcited, linear from -q_max at v_1 to 0 at v_2
             self.q_mode = "overexcited"
             m_12 = (self.nomi_q_mvar - self.norm_max_q_mvar) / (self.v_2 - self.v_1)
             v_dev = self.vm_pu_meas - self.v_1
             q_out = -(m_12 * v_dev + self.norm_max_q_mvar)
         elif self.vm_pu_meas <= self.v_4:
+            # dead band: no reactive power
             q_out = self.nomi_q_mvar
         elif self.vm_pu_meas <= self.v_5:
+            # over-voltage: underexcited, linear from 0 at v_4 to +q_max at v_5
             self.q_mode = "underexcited"
             m_45 = (self.norm_min_q_mvar - self.nomi_q_mvar) / (self.v_5 - self.v_4)
             v_dev = self.vm_pu_meas - self.v_4
-            q_out = m_45 * v_dev + self.nomi_q_mvar
+            q_out = -(m_45 * v_dev + self.nomi_q_mvar)
         else:
+            # strong over-voltage: underexcited, saturated (+q_max)
             self.q_mode = "underexcited"
-            q_out = self.norm_min_q_mvar
+            q_out = -self.norm_min_q_mvar
         return q_out
 
     def get_p_sign(self):
@@ -363,19 +344,15 @@ class StorageController:
         # (I) Battery Charging Block:
         if (self.soc_percent < self.soc_percent_charge_limit) and (residual_power > 0):
             # positive charging
-            p_charge_mw = self.max_p_mw if pv_power > self.max_p_mw else pv_power
-            p_charge_mw = min(self.max_p_mw, pv_power)
-            p_mw = p_charge_mw
+            # charge the surplus only
+            p_mw = min(self.max_p_mw, residual_power)
         # (II) Battery Discharging Block:
         elif (self.soc_percent > self.soc_percent_discharge_limit) and (
             residual_power < 0
         ):
             # negative discharging
-            p_discharge_mw = (
-                self.min_p_mw if load_power < self.min_p_mw else -load_power
-            )
-            p_discharge_mw = max(self.min_p_mw, -load_power)
-            p_mw = p_discharge_mw
+            # discharge the deficit only
+            p_mw = max(self.min_p_mw, residual_power)
         else:
             p_mw = 0
         self.p_mw = p_mw

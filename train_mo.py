@@ -8,6 +8,7 @@ import wandb
 
 # import egridlv_gym
 import mo_gymnasium as mo_gym
+import egridlv_gym  # noqa: F401  (registers the eGridLV environments)
 from mo_gymnasium.wrappers import MORecordEpisodeStatistics
 from morl_baselines.multi_policy.capql.capql import CAPQL
 
@@ -43,9 +44,9 @@ def parse_str_to_array(s):
     return np.array([float(x.strip()) for x in s.split(",")])
 
 
-def train_capql_agent(env_name, episodes=1000, wandb_log=False, ref_point=None):
+def train_capql_agent(env_name, episodes=1000, wandb_log=False, ref_point=None, run_name=None):
     env_id, ref_point = get_env_and_ref_point(env_name, ref_point)
-    save_dir = f"models/{env_name}"
+    save_dir = f"models/{run_name or env_name}"
 
     env = mo_gym.make(env_id)
     eval_env = mo_gym.make(env_id)
@@ -125,6 +126,12 @@ if __name__ == "__main__":
         help="Custom reference point, e.g., '4,-2,2'",
     )
     parser.add_argument(
+        "--run-name",
+        type=str,
+        default=None,
+        help="Folder name under models/ (default: the environment name), e.g. feeder-voltage-capql-fix",
+    )
+    parser.add_argument(
         "--wandb_log",
         action="store_true",
         help="Enable logging to wandb. Default: False",
@@ -139,5 +146,6 @@ if __name__ == "__main__":
         episodes=args.episodes,
         ref_point=ref_point,
         wandb_log=args.wandb_log,
+        run_name=args.run_name,
     )
     logger.info("Training completed.")

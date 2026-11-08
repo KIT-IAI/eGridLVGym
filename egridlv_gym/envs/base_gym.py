@@ -33,6 +33,7 @@ class BaseElectricGym(gym.Env):
         enable_shielding=False,
         enforce_trafo_limit=False,
         transformer_threshold=70.0,
+        reward_variant="default",
     ):
         """
         Base class for the electric grid environment.
@@ -79,6 +80,17 @@ class BaseElectricGym(gym.Env):
         """
         self.mo = mo
         self.use_case = use_case
+        # "default": original reward; "qu": voltage term only outside the Q(U) dead band 0.97-1.03 pu plus a cost
+        # of PV reactive power, loading term only for lines above 80 % (combined use case)
+        # voltage use case: "band" dead-band voltage term only, "band_q" plus PV reactive power cost,
+        # "qu" plus line term above 80 % (all folded into the "voltage" key; curtailment term unchanged)
+        # further shapes f(d) of the voltage penalty for the voltage use case (see VOLTAGE_SHAPES), each with the PV
+        # reactive power cost and the line term of "qu": l1_qu, bowl_qu, hinge_qu, step_qu, count_qu
+        # "<variant>_l10": line term weighted by 10, for bowl_qu and l1_qu; "default_l10" is the default
+        # voltage term plus 10 times the line term (no reactive power cost)
+        if reward_variant not in ("default", "qu", "band", "band_q", "bowl_qu_l10", "l1_qu_l10", "default_l10") + tuple(f"{k}_qu" for k in self.VOLTAGE_SHAPES):
+            raise ValueError(f"Invalid reward variant: {reward_variant}")
+        self.reward_variant = reward_variant
         self.forecast_horizon = forecast_horizon
         self.power_scaling = power_scaling
         self.training = training
@@ -558,6 +570,19 @@ class BaseElectricGym(gym.Env):
         elif self.use_case == "voltage":
             rewards["voltage"] = self._get_voltage_reward()
             rewards["curtailment"] = self._get_pv_curtailment_cost()
+            if self.reward_variant != "default":
+                variant, line_weight = self.reward_variant, 1.0
+                if variant.endswith("_l10"):
+                    variant, line_weight = variant[:-4], 10.0
+                shape = variant[:-3] if variant.endswith("_qu") else None
+                v = (self._get_voltage_reward() + line_weight * self._get_line_overload_reward()) if variant == "default" else \
+                    (self._get_voltage_shape_reward(shape) + self._get_pv_reactive_power_cost()
+                     + line_weight * self._get_line_overload_reward()) if shape in self.VOLTAGE_SHAPES else self._get_voltage_band_reward()
+                if self.reward_variant in ("band_q", "qu"):
+                    v += self._get_pv_reactive_power_cost()
+                if self.reward_variant == "qu":
+                    v += self._get_line_overload_reward()
+                rewards["voltage"] = v
 
         if self.use_case == "combined":
             rewards["price"] = self._get_price_reward()
@@ -565,8 +590,57 @@ class BaseElectricGym(gym.Env):
             rewards["loading"] = self._get_loading_reward()
             rewards["voltage"] = self._get_voltage_reward()
             rewards["curtailment"] = self._get_pv_curtailment_cost()
+            if self.reward_variant not in ("default", "qu"):
+                raise ValueError("reward variants band/band_q are defined for the voltage use case only")
+            if self.reward_variant == "qu":
+                # same keys (multi-objective layout unchanged); the reactive power cost belongs to the voltage term
+                rewards["loading"] = self._get_line_overload_reward()
+                rewards["voltage"] = self._get_voltage_band_reward() + self._get_pv_reactive_power_cost()
 
         return rewards
+
+    # Voltage penalty shapes f(d) per bus, d = |1 - v| (p.u.); reward = -sum_buses f(d) * voltage_cost_scaling.
+    # All shapes are scaled to f(0.1) = 4.9, the value of the dead-band penalty (0.1 - 0.03)^2 / 0.001 at d = 0.1.
+    # Band edge d_b = 0.05 (voltage band 0.95-1.05 p.u.), 1[.] = indicator, phi(d) = exp(-d^2 / (2 s^2)) / (s sqrt(2 pi))
+    # with s = 0.1 (normal density).
+    #   l1:    f(d) = 49 d                                                  linear in the deviation
+    #   bowl:  f(d) = k (2 d - 0.095)              for d > d_b              linear outside the band,
+    #          f(d) = k (0.04 - 0.01 phi(d))       for d <= d_b             flat Gaussian bowl inside, k = 4.9 / 0.105
+    #   hinge: f(d) = 98 max(0, d - d_b)                                    excess beyond the band edge
+    #   step:  f(d) = 2.45 (1 + (d - d_b) / d_b) 1[d > d_b]                 jump at the band edge plus linear excess
+    #   count: f(d) = 4.9 1[d > d_b]                                        number of buses outside the band
+    VOLTAGE_SHAPES = {
+        "l1": lambda d: 49.0 * d,
+        "bowl": lambda d: (4.9 / 0.105) * np.where(
+            d > 0.05, 2.0 * d - 0.095,
+            -0.01 * np.exp(-d ** 2 / 0.02) / (0.1 * np.sqrt(2 * np.pi)) + 0.04),
+        "hinge": lambda d: 98.0 * np.maximum(0.0, d - 0.05),
+        "step": lambda d: 2.45 * np.where(d > 0.05, 1.0 + (d - 0.05) / 0.05, 0.0),
+        "count": lambda d: 4.9 * (d > 0.05),
+    }
+
+    def _get_voltage_shape_reward(self, shape):
+        d = np.abs(1.0 - self.gridMgr.get_voltage_pu())
+        return -float(np.sum(self.VOLTAGE_SHAPES[shape](d))) * self.voltage_cost_scaling
+
+    def _get_voltage_band_reward(self, band=0.03, norm=0.001):
+        """Reward variant "qu": squared voltage deviation only outside the dead band of the Q(U) curve of
+        VDE-AR-N 4105:2026-03 (0.97-1.03 pu), so that reactive power pays off only where the voltage requires it."""
+        voltage = self.gridMgr.get_voltage_pu()
+        excess = np.maximum(0.0, np.abs(1.0 - voltage) - band)
+        return -float(np.sum(excess ** 2)) / norm * self.voltage_cost_scaling
+
+    def _get_line_overload_reward(self, start=80.0, span=20.0):
+        """Reward variant "qu": line loading only above 80 %, steep towards the rating, so that the additional
+        current of reactive power becomes visible where the line binds."""
+        line_load = np.asarray(self.gridMgr.get_line_loading(), dtype=float)
+        return -float(np.sum(np.maximum(0.0, line_load - start)) / span) * self.load_cost_scaling
+
+    def _get_pv_reactive_power_cost(self, weight=0.5):
+        """Reward variant "qu": cost of PV reactive power use (losses, inverter stress), relative to the rating."""
+        sn = sum(c.sn_mva for c in self.gridMgr.pv_controllers)
+        q = sum(abs(float(self.gridMgr.grid.sgen.at[c.id, "q_mvar"])) for c in self.gridMgr.pv_controllers)
+        return -weight * q / max(sn, 1e-9)
 
     def _get_price_reward(self):
         """

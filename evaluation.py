@@ -110,6 +110,10 @@ def run_experiment(
         model = RuleBasedController(mode="baseline")
     elif algorithm == "baseline_price_window":
         model = RuleBasedController(mode="price_window")
+    elif algorithm == "baseline_price_forecast":
+        model = RuleBasedController(mode="price_forecast")
+    elif algorithm == "baseline_price_forecast_avg":
+        model = RuleBasedController(mode="price_forecast_avg")
     elif algorithm == "baseline_voltage":
         model = RuleBasedController(mode="baseline")
         rule_based_voltage = True

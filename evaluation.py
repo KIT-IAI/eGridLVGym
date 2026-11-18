@@ -9,7 +9,7 @@ import os
 import logging
 from datetime import datetime
 
-# import egridlv_gym
+import egridlv_gym  # noqa: F401  (registers the eGridLV environments)
 import pandas as pd
 import argparse
 import numpy as np
@@ -189,7 +189,7 @@ def run_experiment(
                 )
             else:
                 action, _states = model.predict(observation, deterministic=True)
-            obs, rewards, done, info = env.step(action)
+            observation, rewards, done, info = env.step(action)  # was "obs, ...": the policy saw the reset observation all week
 
             # Record episode results
             episode_starts = done

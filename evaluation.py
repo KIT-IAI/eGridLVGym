@@ -9,7 +9,7 @@ import os
 import logging
 from datetime import datetime
 
-# import egridlv_gym
+import egridlv_gym  # noqa: F401  (registers the eGridLV environments)
 import pandas as pd
 import argparse
 import numpy as np
@@ -110,6 +110,10 @@ def run_experiment(
         model = RuleBasedController(mode="baseline")
     elif algorithm == "baseline_price_window":
         model = RuleBasedController(mode="price_window")
+    elif algorithm == "baseline_price_forecast":
+        model = RuleBasedController(mode="price_forecast")
+    elif algorithm == "baseline_price_forecast_avg":
+        model = RuleBasedController(mode="price_forecast_avg")
     elif algorithm == "baseline_voltage":
         model = RuleBasedController(mode="baseline")
         rule_based_voltage = True
@@ -189,7 +193,7 @@ def run_experiment(
                 )
             else:
                 action, _states = model.predict(observation, deterministic=True)
-            obs, rewards, done, info = env.step(action)
+            observation, rewards, done, info = env.step(action)  # was "obs, ...": the policy saw the reset observation all week
 
             # Record episode results
             episode_starts = done

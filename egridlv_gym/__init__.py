@@ -5,7 +5,9 @@ register(
     id="eGridLV-household-economic-v0",
     entry_point="egridlv_gym.envs:BaseElectricGym",
     max_episode_steps=96 * 7,
-    kwargs={"grid": "toy", "use_case": "economic"},
+    # was grid="toy", which BaseElectricGym.create_grid does not know -> it built the whole single feeder (identical to
+    # feeder-economic). Fixed 2026-11-17 to the single household, as in mo-eGridLV-household-economic-v0 (CAPQL).
+    kwargs={"grid": "household", "use_case": "economic"},
 )
 
 register(

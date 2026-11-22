@@ -34,6 +34,7 @@ class BaseElectricGym(gym.Env):
         enforce_trafo_limit=False,
         transformer_threshold=70.0,
         reward_variant="default",
+        mo_penalty_objective=False,
     ):
         """
         Base class for the electric grid environment.
@@ -79,6 +80,9 @@ class BaseElectricGym(gym.Env):
             If True, the environment enables the shielding using the rule based controller for reactive power control.
         """
         self.mo = mo
+        # MO economic case: append -2 x device penalties as an extra objective (as voltage/combined already do);
+        # default False keeps the original 2-objective household reward (price, flexibility) without penalties
+        self.mo_penalty_objective = mo_penalty_objective
         self.use_case = use_case
         # "default": original reward; "qu": voltage term only outside the Q(U) dead band 0.97-1.03 pu plus a cost
         # of PV reactive power, loading term only for lines above 80 % (combined use case)
@@ -106,8 +110,8 @@ class BaseElectricGym(gym.Env):
             self.control_q = False
             self.control_q_shielding = enable_shielding
             if self.mo:
-                self.reward_space = spaces.Box(low=-1, high=1, shape=(2,))
-                self.reward_dim = 2
+                self.reward_dim = 3 if mo_penalty_objective else 2
+                self.reward_space = spaces.Box(low=-1, high=1, shape=(self.reward_dim,))
         elif use_case == "voltage":
             if self.mo:
                 self.reward_space = spaces.Box(low=-1, high=1, shape=(3,))
@@ -291,7 +295,7 @@ class BaseElectricGym(gym.Env):
         observation = self._get_observation()
         truncated = self._check_if_done()
         if self.mo:
-            if self.use_case == "economic":
+            if self.use_case == "economic" and not self.mo_penalty_objective:
                 reward = np.array([val for key, val in rewards.items()])
             else:
                 penalty_sum = sum([val for key, val in penalties.items()])
@@ -330,7 +334,7 @@ class BaseElectricGym(gym.Env):
         observation = self._get_observation()
         truncated = self._check_if_done()
         if self.mo:
-            if self.use_case == "economic":
+            if self.use_case == "economic" and not self.mo_penalty_objective:
                 reward = np.array([val for key, val in rewards.items()])
             else:
                 penalty_sum = sum([val for key, val in penalties.items()])
@@ -400,7 +404,7 @@ class BaseElectricGym(gym.Env):
             # truncated_temp = self._check_if_done()
 
             if self.mo:
-                if self.use_case == "economic":
+                if self.use_case == "economic" and not self.mo_penalty_objective:
                     reward = np.array([val for key, val in rewards.items()])
                 else:
                     penalty_sum = sum([val for key, val in penalties.items()])
@@ -438,7 +442,7 @@ class BaseElectricGym(gym.Env):
             # truncated_temp = self._check_if_done()
 
             if self.mo:
-                if self.use_case == "economic":
+                if self.use_case == "economic" and not self.mo_penalty_objective:
                     reward = np.array([val for key, val in rewards.items()])
                 else:
                     penalty_sum = sum([val for key, val in penalties.items()])

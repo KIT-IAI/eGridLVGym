@@ -51,3 +51,12 @@ register(
     max_episode_steps=96 * 7,
     kwargs={"mo": True, "use_case": "economic", "grid": "household"},
 )
+
+register(
+    id="mo-eGridLV-household-economic-pen-v0",
+    entry_point="egridlv_gym.envs:BaseElectricGym",
+    max_episode_steps=96 * 7,
+    # household economic with a third objective -2 x device penalties (added 2026-11-17; the SORL reward is the sum of
+    # the three objectives, i.e. the scalarisation with equal weights)
+    kwargs={"mo": True, "use_case": "economic", "grid": "household", "mo_penalty_objective": True},
+)

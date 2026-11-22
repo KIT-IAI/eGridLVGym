@@ -17,7 +17,7 @@ import numpy as np
 from stable_baselines3 import PPO, SAC, DDPG, TD3, A2C
 from sb3_contrib import TQC, TRPO, RecurrentPPO
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
+from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
 from rule_based_controller import (
     RuleBasedController,
@@ -56,6 +56,7 @@ def run_experiment(
     enable_shielding=False,
     folder="./models/feeder-combined/best_trpo/best_model.zip",
     enforce_hard_grid_constraint=False,
+    per_week_seed=False,
 ):
     if folder is None:
         folder = f"./models/{usecase}/{algorithm}"
@@ -135,9 +136,10 @@ def run_experiment(
         raise ValueError("Invalid usecase")
 
     # Initialize parallel environments
+    # per_week_seed: one environment, test week set explicitly and seed 58 + week, so that each week gets its own random sequence
     env = make_vec_env(
-        get_seeded_env_fn(env_name, seed),
-        n_envs=num_envs,
+        env_name if per_week_seed else get_seeded_env_fn(env_name, seed),
+        n_envs=1 if per_week_seed else num_envs,
         env_kwargs={
             "num_days": 7,
             "render_mode": None,
@@ -149,7 +151,7 @@ def run_experiment(
             "enforce_trafo_limit": enforce_hard_grid_constraint,
             "transformer_threshold": 84.5,
         },
-        vec_env_cls=SubprocVecEnv,
+        vec_env_cls=DummyVecEnv if per_week_seed else SubprocVecEnv,
     )
 
     logger.info("*** evaluation.py started ***")
@@ -167,10 +169,11 @@ def run_experiment(
     env = VecMonitor(env, filename=log_path)
     logger.info(f"Logging VecMonitor to: {log_path}")
 
-    model.set_env(env)
+    if not (per_week_seed and hasattr(model, "n_envs")):   # SB3 models predict with one environment; set_env would
+        model.set_env(env)                                      # require the n_envs of training (rule-based controllers need it)
     global_result = []
     observation = env.reset()
-    episode_starts = np.ones(num_envs, dtype=bool)
+    episode_starts = np.ones(env.num_envs, dtype=bool)
     lstm_states = None
 
     # Evaluate model
@@ -180,10 +183,13 @@ def run_experiment(
         cumulative_reward = 0
         truncated = False
         #        observation = env.reset(seed=seed)
+        if per_week_seed:   # week `iteration` of the test split with seed + week, no other reset in between
+            env.get_attr("unwrapped")[0].test_counter = iteration
+            env.seed(seed + iteration)
         observation = env.reset()
 
         lstm_states = None
-        episode_starts = np.ones(num_envs, dtype=bool)
+        episode_starts = np.ones(env.num_envs, dtype=bool)
 
         while not truncated:
             if recurrent:
@@ -342,6 +348,12 @@ if __name__ == "__main__":
         help="Enable reactive power control (shielding).",
     )
     parser.add_argument(
+        "--per-week-seed",
+        default=False,
+        action="store_true",
+        help="One environment, test week set explicitly and seed + week per week (reproducible per week, independent of the order).",
+    )
+    parser.add_argument(
         "--enforce_hard_grid_constraint",
         default=False,
         action="store_true",
@@ -365,6 +377,7 @@ if __name__ == "__main__":
         enable_shielding=args.enable_shielding,
         folder=args.folder,
         enforce_hard_grid_constraint=args.enforce_hard_grid_constraint,
+        per_week_seed=args.per_week_seed,
     )
     end_time = datetime.now()
     duration = end_time - start_time

@@ -528,7 +528,7 @@ class BaseElectricGym(gym.Env):
 
             base_observation["price"] = np.array(price, dtype=np.float32)
         if self.use_case == "voltage":
-            voltages = self.gridMgr.get_voltage_pu(normalize=self.normalize)
+            voltages = np.array(self.gridMgr.get_voltage_pu(normalize=self.normalize), dtype=float)  # copy: the noise below must not change the power flow results (normalize=False returns a view)
 
             voltage_noise = self.np_random.normal(0, 0.01, voltages.shape)
             voltages += voltage_noise
@@ -540,7 +540,7 @@ class BaseElectricGym(gym.Env):
             price += price_noise
             base_observation["price"] = np.array(price, dtype=np.float32)
 
-            voltages = self.gridMgr.get_voltage_pu(normalize=self.normalize)
+            voltages = np.array(self.gridMgr.get_voltage_pu(normalize=self.normalize), dtype=float)  # copy: the noise below must not change the power flow results (normalize=False returns a view)
             line_loading = self.gridMgr.get_line_loading()
             trafo_loading = self.gridMgr.get_transformer_loading()
 
@@ -766,10 +766,12 @@ class BaseElectricGym(gym.Env):
         soc_percent = self.gridMgr.get_storage_soc()
         ev_soc_percent = self.gridMgr.get_ev_soc()
         ev_present = self.gridMgr.get_ev_present()
-        line_loading = self.gridMgr.get_line_loading()
-        trafo_loading = self.gridMgr.get_transformer_loading()
-        voltage = self.gridMgr.get_voltage_pu()
-        ext_power = self.gridMgr.get_ext_power()
+        # copies, not views of the power flow results: a vectorized env resets right after the last step of an episode,
+        # and its power flow would otherwise overwrite the values of the last step in the returned info
+        line_loading = np.array(self.gridMgr.get_line_loading(), dtype=float)
+        trafo_loading = np.array(self.gridMgr.get_transformer_loading(), dtype=float)
+        voltage = np.array(self.gridMgr.get_voltage_pu(), dtype=float)
+        ext_power = np.array(self.gridMgr.get_ext_power(), dtype=float)
         pv_curtailment = self.gridMgr.get_pv_curtailment()
         price = self._current_price()
 

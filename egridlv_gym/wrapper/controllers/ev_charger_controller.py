@@ -40,6 +40,9 @@ class EVChargerController:
                 self.rule_based_p_control(grid_state, timestep)
             self.update_soc_from_previous(grid_state)
         else:
+            # an absent vehicle exchanges no power: reset the controller value too, since
+            # GridManager.get_current_power() and with it the price reward read self.p_mw
+            self.p_mw = 0
             grid_state.storage.at[self.id, "p_mw"] = 0
             self.soc_percent = 0
             grid_state.storage.at[self.id, "soc_percent"] = 0
@@ -93,6 +96,10 @@ class EVChargerController:
             departure_prob = self.departure_probabilities[timestep]
             if departure_number <= departure_prob:
                 self.at_home = False
+                # the vehicle leaves before the power flow of this step (in_service = False below), so its
+                # setpoint of this step has no effect in the grid and must not enter the price reward either
+                self.p_mw = 0
+                grid_state.storage.at[self.id, "p_mw"] = 0
                 self.soc_percent = 0
                 grid_state.storage.at[self.id, "soc_percent"] = 0
                 grid_state.storage.at[self.id, "in_service"] = False

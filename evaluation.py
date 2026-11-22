@@ -32,6 +32,8 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+# Output root, default ./results (e.g. EGRIDLV_RESULTS_ROOT=results/run_a keeps evaluations of different runs apart)
+RESULTS_ROOT = os.environ.get("EGRIDLV_RESULTS_ROOT", "./results")
 start_time = datetime.now()
 logger.info(f"Starting evaluation script at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -62,17 +64,17 @@ def run_experiment(
         logging.info("[INFO] VDE Shielding enabled")
         if enforce_hard_grid_constraint:
             logging.info("[INFO] Shielding and transformer hard constraint enforced.")
-            output_path = f"./results/{usecase}/evaluations/hard_vde-shielding/eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/hard_vde-shielding/eval_{algorithm}.csv"
         else:
             output_path = (
-                f"./results/{usecase}/evaluations/vde-shielding/eval_{algorithm}.csv"
+                f"{RESULTS_ROOT}/{usecase}/evaluations/vde-shielding/eval_{algorithm}.csv"
             )
     else:
         if enforce_hard_grid_constraint:
             logging.info("[INFO] Transformer hard constraint enforced.")
-            output_path = f"./results/{usecase}/evaluations/hard/eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/hard/eval_{algorithm}.csv"
         else:
-            output_path = f"./results/{usecase}/evaluations/eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/eval_{algorithm}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     logger.info(f"Output path: {output_path}")
 
@@ -159,7 +161,7 @@ def run_experiment(
     logger.info(f"enforce_hard_grid_constraint: {enforce_hard_grid_constraint}")
 
     # Setup logging path for environment metrics
-    log_path = f"./results/{usecase}/final_eval_env_logs/"
+    log_path = f"{RESULTS_ROOT}/{usecase}/final_eval_env_logs/"
     log_path += "vde-shielding/" if enable_shielding else ""
     log_path += algorithm
     env = VecMonitor(env, filename=log_path)
@@ -268,18 +270,18 @@ def run_experiment(
     if enable_shielding:
         if enforce_hard_grid_constraint:
             logging.info("[INFO] Shielding and transformer hard constraint enforced.")
-            output_path = f"./results/{usecase}/evaluations/vde-shielding/hard_eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/vde-shielding/hard_eval_{algorithm}.csv"
         else:
             logging.info("[INFO] VDE Shielding enabled")
             output_path = (
-                f"./results/{usecase}/evaluations/vde-shielding/eval_{algorithm}.csv"
+                f"{RESULTS_ROOT}/{usecase}/evaluations/vde-shielding/eval_{algorithm}.csv"
             )
     else:
         if enforce_hard_grid_constraint:
             logging.info("[INFO] Transformer hard constraint enforced.")
-            output_path = f"./results/{usecase}/evaluations/hard_eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/hard_eval_{algorithm}.csv"
         else:
-            output_path = f"./results/{usecase}/evaluations/eval_{algorithm}.csv"
+            output_path = f"{RESULTS_ROOT}/{usecase}/evaluations/eval_{algorithm}.csv"
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     # Save the DataFrame to a CSV file
     eval_episode_data.to_csv(output_path)

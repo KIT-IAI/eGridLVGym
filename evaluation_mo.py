@@ -1,15 +1,20 @@
 import logging
+import os
 import argparse
 import sys
 from datetime import datetime
 import pandas as pd
 import numpy as np
 
-# import egridlv_gym
+import egridlv_gym  # noqa: F401  (registers the eGridLV environments)
 # import mo_gymnasium as mo_gym
 # from morl_baselines.common.evaluation import seed_everything
 from morl_baselines.multi_policy.capql.capql import CAPQL
 from utils.seed_wrapper import get_seeded_mo_env_fn
+
+# Output root (default ./results) and model directory (default ./models/<usecase>), both configurable
+RESULTS_ROOT = os.environ.get("EGRIDLV_RESULTS_ROOT", "./results")
+MODEL_DIR = os.environ.get("EGRIDLV_MO_MODEL_DIR")
 
 
 # Configure logging with timestamp and log level
@@ -33,12 +38,14 @@ def weight_scaling_experiment(
 ):
     logging.info(f"Starting weight scaling: {algorithm}, {usecase}")
     model_path = f"./models/{usecase}/{model_folder}/{algorithm}.tar"
-    model_path = f"./models/{usecase}/{model_folder}/best_model.tar"
+    model_path = f"{MODEL_DIR or './models/' + usecase}/{model_folder}/best_model.tar"
 
     rule_based_voltage = False
 
     if usecase == "household-economic":
         env_name = "mo-eGridLV-household-economic-v0"
+    elif usecase == "household-economic-pen":
+        env_name = "mo-eGridLV-household-economic-pen-v0"
     elif usecase == "feeder-economic":
         env_name = "mo-eGridLV-feeder-economic-v0"
     elif usecase == "feeder-voltage":
@@ -138,8 +145,9 @@ def weight_scaling_experiment(
         )
         logging.debug(f"Current result: {weights_results[-1]}")
     final_results = pd.DataFrame(weights_results)
+    os.makedirs(f"{RESULTS_ROOT}/{usecase}/evaluations/weights_scale", exist_ok=True)
     final_results.to_csv(
-        f"./results/{usecase}/evaluations/weights_scale/eval_{model_folder}_{grid_type}.csv"
+        f"{RESULTS_ROOT}/{usecase}/evaluations/weights_scale/eval_{model_folder}_{grid_type}.csv"
     )
     logging.info(
         f"Results saved to: ./results/{usecase}/evaluations/weights_scale/eval_{model_folder}_{grid_type}.csv"
@@ -154,12 +162,14 @@ def run_experiment(
     weight=np.array([1, 1]),
     seed=58,
 ):
-    model_path = f"./models/{usecase}/{model_folder}/best_model.tar"
+    model_path = f"{MODEL_DIR or './models/' + usecase}/{model_folder}/best_model.tar"
     logging.info(f"Using model_path from: {model_path}")
     rule_based_voltage = False
 
     if usecase == "household-economic":
         env_name = "mo-eGridLV-household-economic-v0"
+    elif usecase == "household-economic-pen":
+        env_name = "mo-eGridLV-household-economic-pen-v0"
     elif usecase == "feeder-economic":
         env_name = "mo-eGridLV-feeder-economic-v0"
     elif usecase == "feeder-voltage":
@@ -263,7 +273,8 @@ def run_experiment(
         if truncated:
             observation, info = env.reset()
     eval_episode_data = pd.DataFrame(global_result)
-    eval_episode_data.to_csv(f"./results/{usecase}/evaluations/eval_{model_folder}.csv")
+    os.makedirs(f"{RESULTS_ROOT}/{usecase}/evaluations", exist_ok=True)
+    eval_episode_data.to_csv(f"{RESULTS_ROOT}/{usecase}/evaluations/eval_{model_folder}.csv")
     logging.info(
         f"Results saved to: ./results/{usecase}/evaluations/eval_{model_folder}.csv"
     )

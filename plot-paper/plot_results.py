@@ -20,6 +20,7 @@ Output:
 from __future__ import annotations
 
 import glob
+import os
 import re
 from pathlib import Path
 
@@ -63,8 +64,9 @@ TRAINING_COLORS = {
     "baseline_price_window": COLORS[5],
 }
 
-BASE_PATH = Path("../results")
-SAVE_DIR = Path(".")
+# EGRIDLV_PLOT_BASE / EGRIDLV_PLOT_OUT: input and output folders (default ../results and the current folder)
+BASE_PATH = Path(os.environ.get("EGRIDLV_PLOT_BASE", "../results"))
+SAVE_DIR = Path(os.environ.get("EGRIDLV_PLOT_OUT", "."))
 SAVE_DIR.mkdir(exist_ok=True)
 
 # Helper

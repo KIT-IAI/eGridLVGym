@@ -199,6 +199,12 @@ arguments:
 | `--reward-variant`      | str   | `default`        | `default`, `qu`, `band`, `band_q`, `l1_qu`, `bowl_qu`, `hinge_qu`, `step_qu`, `count_qu`, `bowl_qu_l10`, `l1_qu_l10`, `default_l10` | Reward variant: `default` is the original reward; `feeder-combined`: `qu` (voltage term only outside the Q(U) dead band 0.97-1.03 p.u., line term above 80 %, PV reactive power cost); `feeder-voltage`: `band`, `band_q`, `qu` and the penalty shapes `l1_qu`, `bowl_qu`, `hinge_qu`, `step_qu`, `count_qu`; `*_l10`: line term weighted by 10. |
 | `--run-name`            | str   | use case         | string                                                                       | Folder name under `models/` and `results/`, so that runs with different settings do not overwrite each other. |
 
+The monitor files of the training and of the periodic evaluation (`<run>/train_env_logs/`, `<run>/eval_env_logs/`)
+contain one row per episode with the episode reward and, since November 2026, physical quantities of the episode:
+energy cost at the transformer, steps with transformer or line loading above 100 %, steps outside the voltage band,
+extreme values, the state of charge of the vehicles at departure and the sums of the reward terms
+(`utils/episode_kpi_wrapper.py`).
+
 ##### **3.1a Example Training - Using Command Line**:
 
 ```bash

@@ -5,6 +5,7 @@ and trains the agent using SB3.
 Results, logs, and models are saved for reproducibility and evaluation.
 """
 
+import os
 import sys
 import logging
 from datetime import datetime
@@ -21,6 +22,23 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 # , DummyVecEnv
 from stable_baselines3.common.callbacks import EvalCallback
 from utils.seed_wrapper import get_seeded_env_fn
+from utils.episode_kpi_wrapper import EpisodeKpiWrapper, KPI_KEYS
+
+# Output roots, defaults ./models and ./results (e.g. EGRIDLV_MODELS_ROOT=models/run_a,
+# EGRIDLV_TRAIN_ROOT=results/run_a)
+MODELS_ROOT = os.environ.get("EGRIDLV_MODELS_ROOT", "models")
+TRAIN_ROOT = os.environ.get("EGRIDLV_TRAIN_ROOT", "results")
+
+
+class EvalAtStartCallback(EvalCallback):
+    """EvalCallback that additionally evaluates once before the first update (timestep 0 in evaluations.npz)."""
+
+    def _on_training_start(self) -> None:
+        super()._on_training_start()
+        n_calls, eval_freq = self.n_calls, self.eval_freq
+        self.n_calls, self.eval_freq = 0, 1
+        self._on_step()
+        self.n_calls, self.eval_freq = n_calls, eval_freq
 
 # Logging configuration
 logging.basicConfig(
@@ -193,6 +211,11 @@ if __name__ == "__main__":
         "count_qu and *_l10 (line term weighted by 10).",
     )
     parser.add_argument(
+        "--eval-at-start",
+        action="store_true",
+        help="Also evaluate the untrained policy at timestep 0 (first point of the learning curve).",
+    )
+    parser.add_argument(
         "--run-name",
         type=str,
         default=None,
@@ -247,6 +270,7 @@ if __name__ == "__main__":
         },
         vec_env_cls=SubprocVecEnv,
         seed=args.seed,
+        wrapper_class=EpisodeKpiWrapper,   # physical quantities per episode in the monitor file
     )
 
     # Distinguish model name if curtailment scaling != 1.0
@@ -258,7 +282,8 @@ if __name__ == "__main__":
     # Wrap environment for logging/monitoring
     train_env = VecMonitor(
         train_env,
-        filename=f"results/{run_dir}/train_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        filename=f"{TRAIN_ROOT}/{run_dir}/train_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        info_keywords=KPI_KEYS,
     )  # /train_{args.num_envs}_{algorithm_name}_{args.seed}
 
     # Select model based on algorithm
@@ -275,22 +300,24 @@ if __name__ == "__main__":
             "reward_variant": args.reward_variant,
         },
         vec_env_cls=SubprocVecEnv,
+        wrapper_class=EpisodeKpiWrapper,
     )
 
     eval_env = VecMonitor(
         eval_env,
-        filename=f"results/{run_dir}/eval_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        filename=f"{TRAIN_ROOT}/{run_dir}/eval_env_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        info_keywords=KPI_KEYS,
     )
 
     # Evaluation callback setup
-    eval_callback = EvalCallback(
+    eval_callback = (EvalAtStartCallback if getattr(args, "eval_at_start", False) else EvalCallback)(
         eval_env,
-        best_model_save_path=f"models/{run_dir}/best_{algorithm_name}/",
+        best_model_save_path=f"{MODELS_ROOT}/{run_dir}/best_{algorithm_name}/",
         eval_freq=max(eval_freq // args.num_envs, 1),
         deterministic=True,
         render=False,
         n_eval_episodes=11 * args.num_envs,
-        log_path=f"results/{run_dir}/eval_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
+        log_path=f"{TRAIN_ROOT}/{run_dir}/eval_logs/{args.num_envs}_{algorithm_name}_{args.seed}",
     )
 
     logger.info(f"Starting '{algorithm}' training for {args.episodes} episodes.")
@@ -305,7 +332,7 @@ if __name__ == "__main__":
     )
 
     # Saving Model
-    model_save_path = f"models/{run_dir}/{algorithm_name}"
+    model_save_path = f"{MODELS_ROOT}/{run_dir}/{algorithm_name}"
     model.save(model_save_path)
 
     # Log training end time, duration, and save location

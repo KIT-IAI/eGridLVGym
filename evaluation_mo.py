@@ -161,6 +161,7 @@ def run_experiment(
     usecase="household-economic",
     weight=np.array([1, 1]),
     seed=58,
+    per_week_seed=False,
 ):
     model_path = f"{MODEL_DIR or './models/' + usecase}/{model_folder}/best_model.tar"
     logging.info(f"Using model_path from: {model_path}")
@@ -198,6 +199,9 @@ def run_experiment(
 
         truncated = False
         logging.info(f"Running iteration {iteration}")
+        if per_week_seed:   # test week `iteration`, seed + week, as evaluation.py --per-week-seed
+            env.unwrapped.test_counter = iteration
+            observation, info = env.reset(seed=seed + iteration)
         while not truncated:
             action = model.eval(observation, w=weight)
             observation, rewards, terminated, truncated, info = env.step(action)
@@ -312,6 +316,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--seed", type=int, default=58, help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--per-week-seed", default=False, action="store_true",
+        help="weight_single: reset each test week explicitly with seed + week (same scheme as evaluation.py --per-week-seed)",
+    )
     args = parser.parse_args()
 
     if args.mode == "weight_single":
@@ -335,6 +343,7 @@ if __name__ == "__main__":
             usecase=args.usecase,
             weight=weight,
             seed=args.seed,
+            per_week_seed=args.per_week_seed,
         )
     elif args.mode == "weight_multi":
         weight_scaling_experiment(

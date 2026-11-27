@@ -9,7 +9,7 @@
 
 <h1 align="center">Multi-Objective Reinforcement Learning with Shielding for Control and Safety in Power Grids</h1>
 
-**⚠️ Note**: _Last update on 08.11.2026_
+**⚠️ Note**: _Last update on 27.11.2026_
 
 This repository contains the Python implementation of our paper: **Multi-Objective
 Reinforcement Learning with Shielding for Control and Safety in Power Grids**.
@@ -279,8 +279,8 @@ If you use this framework in your research, please consider citing our paper &#1
     address = {New York, NY, USA},
     volume = {5},
     number = {3},
-    url = {https://doi.org/10.1145/3717413.3717427},
-    doi = {10.1145/3717413.3717427},
+    url = {https://doi.org/10.1145/3777518.3777526},
+    doi = {10.1145/3777518.3777526},
     journal = {SIGENERGY Energy Inform. Rev.},
     month = dec,
     pages = {93–104},
